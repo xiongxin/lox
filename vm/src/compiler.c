@@ -176,6 +176,22 @@ static void declaration();
 static ParseRule *getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 
+static uint8_t identifierConstant(Token *name)
+{
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+static uint8_t parseVariable(const char *errorMessage)
+{
+    consume(TOKEN_IDENTIFIER, errorMessage);
+    return identifierConstant(&parser.previous);
+}
+
+static void defineVariable(uint8_t global)
+{
+    emitBytes(OP_DEFINE_GLOBAL, global);
+}
+
 static void binary()
 {
     // Remember the operator.
