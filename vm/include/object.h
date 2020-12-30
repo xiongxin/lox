@@ -5,6 +5,7 @@
 #include "value.h"
 
 #define OBJ_TYPE(value) (AS_OBJ(value)->type)
+// body use value twice
 #define IS_STRING(value) isObjType(value, OBJ_STRING)
 
 #define AS_STRING(value) ((ObjString *)AS_OBJ(value))
@@ -23,7 +24,7 @@ struct Obj
 
 struct ObjString
 {
-    Obj obj;
+    Obj obj; //头部指针，用于标记不同的类型
     int length;
     char *chars;
     uint32_t hash;

@@ -3,6 +3,7 @@
 
 #include "common.h"
 
+// forward-declare
 typedef struct Obj Obj;
 typedef struct ObjString ObjString;
 
