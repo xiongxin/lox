@@ -1,0 +1,5 @@
+var breakfast = 1;
+var beverage = 2;
+breakfast = 3 + beverage;
+
+print breakfast + 100;

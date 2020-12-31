@@ -1,0 +1,3 @@
+var beverage = 1222;
+var breakfast = 12212 + beverage;
+print breakfast;

@@ -1,0 +1,12 @@
+{
+    var a = 100;
+    {
+        var b = 100 + a;
+        {
+            var c = b + 200;
+            print a + b + c;
+        }
+    }
+}
+
+print "OK";
