@@ -6,9 +6,9 @@ pub const ArrayListOfValue = std.ArrayList(Value);
 
 pub const Value = union(enum) {
     boolean: bool,
-    number:  f64,
+    number: f64,
     nil,
-    obj:     *Obj,
+    obj: *Obj,
 };
 
 pub const ObjType = enum {
@@ -19,9 +19,9 @@ pub const ObjType = enum {
 };
 
 pub const Obj = struct {
-    objType:  ObjType,
+    objType: ObjType,
     isMarked: bool,
-    next:     ?*Obj,
+    next: ?*Obj,
 };
 
 pub const ArrayListOfObjUpvalue = std.ArrayList(*ObjUpvalue);
@@ -53,7 +53,7 @@ pub const ObjString = struct {
 };
 
 pub fn number2Value(value: f64) Value {
-    return Value { .number = value};
+    return Value{ .number = value };
 }
 
 pub fn nil2Value() Value {
@@ -61,27 +61,27 @@ pub fn nil2Value() Value {
 }
 
 pub fn bool2Value(boolean: bool) Value {
-    return Value { .boolean = boolean };
+    return Value{ .boolean = boolean };
 }
 
 pub fn obj2Value(obj: *Obj) Value {
-    return Value { .obj = obj };
+    return Value{ .obj = obj };
 }
 
 pub fn objString2Value(str: *ObjString) Value {
-    return Value { .obj = @ptrCast(*Obj, str) };
+    return Value{ .obj = @ptrCast(*Obj, str) };
 }
 
 pub fn objFunction2Value(fun: *ObjFunction) Value {
-    return Value { .obj = @ptrCast(*Obj, fun) };
+    return Value{ .obj = @ptrCast(*Obj, fun) };
 }
 
 pub fn objClosure2Value(closure: *ObjClosure) Value {
-    return Value { .obj = @ptrCast(*Obj, closure) };
+    return Value{ .obj = @ptrCast(*Obj, closure) };
 }
 
 pub fn objUpvalue2Value(upvalue: *ObjUpvalue) Value {
-    return Value { .obj = @ptrCast(*Obj, upvalue) };
+    return Value{ .obj = @ptrCast(*Obj, upvalue) };
 }
 
 pub fn asBool(value: Value) bool {
@@ -178,7 +178,6 @@ pub fn isFun(value: Value) bool {
     };
 }
 
-
 pub fn isClosure(value: Value) bool {
     return switch (value) {
         .obj => |obj| {
@@ -206,11 +205,11 @@ pub fn isFalsey(value: Value) bool {
 
 pub fn valuesEqual(a: Value, b: Value) bool {
     return switch (a) {
-        .nil     => if (isNil(b)) true else false,
+        .nil => if (isNil(b)) true else false,
         .boolean => if (isBool(b)) asBool(a) == asBool(b) else false,
-        .number  => if (isNumber(b)) asNumber(a) == asNumber(b) else false,
-        .obj     => |obj| {
-            print("{} {}", .{@ptrToInt(asObj(a)), @ptrToInt(asObj(b))});
+        .number => if (isNumber(b)) asNumber(a) == asNumber(b) else false,
+        .obj => |obj| {
+            print("{} {}", .{ @ptrToInt(asObj(a)), @ptrToInt(asObj(b)) });
             return @ptrToInt(asObj(a)) == @ptrToInt(asObj(b));
         },
     };

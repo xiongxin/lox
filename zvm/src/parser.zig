@@ -9,28 +9,27 @@ usingnamespace @import("heap.zig");
 
 pub var parser: Parser = undefined;
 
-// Lox’s precedence levels in order from lowest to highest. 
+// Lox’s precedence levels in order from lowest to highest.
 const Precedence = enum {
-    PREC_NONE,
-    PREC_ASSIGNMENT,  // =
-    PREC_OR,          // or
-    PREC_AND,         // and
-    PREC_EQUALITY,    // == !=
-    PREC_COMPARISON,  // < > <= >=
-    PREC_TERM,        // + -
-    PREC_FACTOR,      // * /
-    PREC_UNARY,       // ! -
-    PREC_CALL,        // . ()
+    PREC_NONE, PREC_ASSIGNMENT, // =
+    PREC_OR, // or
+    PREC_AND, // and
+    PREC_EQUALITY, // == !=
+    PREC_COMPARISON, // < > <= >=
+    PREC_TERM, // + -
+    PREC_FACTOR, // * /
+    PREC_UNARY, // ! -
+    PREC_CALL, // . ()
     PREC_PRIMARY
 };
 
 const ParseRule = struct {
     prefix: ?ParseFn,
-    infix:  ?ParseFn,
+    infix: ?ParseFn,
     precedence: Precedence,
 };
 
-const ParseFn = fn(self: *Parser, canAssing: bool) anyerror!void;
+const ParseFn = fn (self: *Parser, canAssing: bool) anyerror!void;
 
 pub const Parser = struct {
     current: Token,
@@ -39,7 +38,7 @@ pub const Parser = struct {
     panicMode: bool,
 
     pub fn init() Parser {
-        return Parser {
+        return Parser{
             .current = undefined,
             .previous = undefined,
             .hadError = false,
@@ -47,54 +46,53 @@ pub const Parser = struct {
         };
     }
 
-
     const rules = [_]ParseRule{
-        .{ .prefix = grouping,  .infix = call,     .precedence =  .PREC_CALL },  // TOKEN_LEFT_PAREN
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_RIGHT_PAREN
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_LEFT_BRACE
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_RIGHT_BRACE
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_COMMA
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_DOT
-        .{ .prefix = unary,     .infix = binary,   .precedence =  .PREC_TERM }, // TOKEN_MINUS
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_TERM }, // TOKEN_PLUS
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_SEMICOLON
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_FACTOR }, // TOKEN_SLASH
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_FACTOR }, // TOKEN_STAR
-        .{ .prefix = unary,     .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_BANG
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_EQUALITY }, // TOKEN_BANG_EQUAL
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_EQUAL
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_EQUALITY }, // TOKEN_EQUAL_EQUAL
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_COMPARISON }, // TOKEN_GREATER
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_COMPARISON }, // TOKEN_GREATER_EQUAL
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_COMPARISON }, // TOKEN_LESS
-        .{ .prefix = null,      .infix = binary,   .precedence =  .PREC_COMPARISON }, // TOKEN_LESS_EQUAL
-        .{ .prefix = variable,  .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_IDENTIFIER
-        .{ .prefix = string,    .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_STRING
-        .{ .prefix = number,    .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_NUMBER
-        .{ .prefix = null,      .infix = and_,     .precedence =  .PREC_AND }, // TOKEN_AND
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_CLASS
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_ELSE
-        .{ .prefix = literal,   .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_FALSE
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_FOR
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_FUN
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_IF
-        .{ .prefix = literal,   .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_NIL
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_OR
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_PRINT
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_RETURN
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_SUPER
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_THIS
-        .{ .prefix = literal,   .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_TRUE
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_VAR
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_WHILE
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_ERROR
-        .{ .prefix = null,      .infix = null,     .precedence =  .PREC_NONE }, // TOKEN_EOF
+        .{ .prefix = grouping, .infix = call, .precedence = .PREC_CALL }, // TOKEN_LEFT_PAREN
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_RIGHT_PAREN
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_LEFT_BRACE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_RIGHT_BRACE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_COMMA
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_DOT
+        .{ .prefix = unary, .infix = binary, .precedence = .PREC_TERM }, // TOKEN_MINUS
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_TERM }, // TOKEN_PLUS
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_SEMICOLON
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_FACTOR }, // TOKEN_SLASH
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_FACTOR }, // TOKEN_STAR
+        .{ .prefix = unary, .infix = null, .precedence = .PREC_NONE }, // TOKEN_BANG
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_EQUALITY }, // TOKEN_BANG_EQUAL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_EQUAL
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_EQUALITY }, // TOKEN_EQUAL_EQUAL
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_COMPARISON }, // TOKEN_GREATER
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_COMPARISON }, // TOKEN_GREATER_EQUAL
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_COMPARISON }, // TOKEN_LESS
+        .{ .prefix = null, .infix = binary, .precedence = .PREC_COMPARISON }, // TOKEN_LESS_EQUAL
+        .{ .prefix = variable, .infix = null, .precedence = .PREC_NONE }, // TOKEN_IDENTIFIER
+        .{ .prefix = string, .infix = null, .precedence = .PREC_NONE }, // TOKEN_STRING
+        .{ .prefix = number, .infix = null, .precedence = .PREC_NONE }, // TOKEN_NUMBER
+        .{ .prefix = null, .infix = and_, .precedence = .PREC_AND }, // TOKEN_AND
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_CLASS
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_ELSE
+        .{ .prefix = literal, .infix = null, .precedence = .PREC_NONE }, // TOKEN_FALSE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_FOR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_FUN
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_IF
+        .{ .prefix = literal, .infix = null, .precedence = .PREC_NONE }, // TOKEN_NIL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_OR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_PRINT
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_RETURN
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_SUPER
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_THIS
+        .{ .prefix = literal, .infix = null, .precedence = .PREC_NONE }, // TOKEN_TRUE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_VAR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_WHILE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_ERROR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, // TOKEN_EOF
     };
 
     pub fn advance(self: *Parser) void {
         self.previous = self.current;
 
-        while(true) {
+        while (true) {
             self.current = sacnner.scanToken();
             if (self.current.tokenType != TokenType.TOKEN_ERROR) {
                 break;
@@ -112,7 +110,7 @@ pub const Parser = struct {
         self.errorAt(&self.previous, message);
     }
 
-    fn errorAt(self: *Parser , token: *Token, message: []const u8) void {
+    fn errorAt(self: *Parser, token: *Token, message: []const u8) void {
         if (self.panicMode) {
             return;
         }
@@ -129,7 +127,6 @@ pub const Parser = struct {
         print(": {}\n", .{message});
         self.hadError = true;
     }
-
 
     pub fn consume(self: *Parser, tokenType: TokenType, message: []const u8) void {
         if (self.current.tokenType == tokenType) {
@@ -165,7 +162,7 @@ pub const Parser = struct {
 
     fn makeConstant(self: *Parser, value: Value) !u8 {
         const constant = try currentChunk().addConstant(value);
-        
+
         if (constant > std.math.maxInt(u8)) {
             self.error0("Too many constant in one chunk.");
             return 0;
@@ -229,17 +226,17 @@ pub const Parser = struct {
 
         // Emit the operator instruction.
         switch (operatorType) {
-            TokenType.TOKEN_MINUS         => try self.emitOpCode(OpCode.OP_SUBTRACT),
-            TokenType.TOKEN_PLUS          => try self.emitOpCode(OpCode.OP_ADD),
-            TokenType.TOKEN_STAR          => try self.emitOpCode(OpCode.OP_MULTIPLY),
-            TokenType.TOKEN_SLASH         => try self.emitOpCode(OpCode.OP_DIVIDE),
+            TokenType.TOKEN_MINUS => try self.emitOpCode(OpCode.OP_SUBTRACT),
+            TokenType.TOKEN_PLUS => try self.emitOpCode(OpCode.OP_ADD),
+            TokenType.TOKEN_STAR => try self.emitOpCode(OpCode.OP_MULTIPLY),
+            TokenType.TOKEN_SLASH => try self.emitOpCode(OpCode.OP_DIVIDE),
             // 比较操作
-            TokenType.TOKEN_BANG_EQUAL    => try self.emitOpCodes(OpCode.OP_EQUAL, OpCode.OP_NOT),
-            TokenType.TOKEN_EQUAL_EQUAL   => try self.emitOpCode(OpCode.OP_EQUAL),
-            TokenType.TOKEN_GREATER       => try self.emitOpCode(OpCode.OP_GREATER),
+            TokenType.TOKEN_BANG_EQUAL => try self.emitOpCodes(OpCode.OP_EQUAL, OpCode.OP_NOT),
+            TokenType.TOKEN_EQUAL_EQUAL => try self.emitOpCode(OpCode.OP_EQUAL),
+            TokenType.TOKEN_GREATER => try self.emitOpCode(OpCode.OP_GREATER),
             TokenType.TOKEN_GREATER_EQUAL => try self.emitOpCodes(OpCode.OP_LESS, OpCode.OP_NOT),
-            TokenType.TOKEN_LESS          => try self.emitOpCode(OpCode.OP_LESS),
-            TokenType.TOKEN_LESS_EQUAL    => try self.emitOpCodes(OpCode.OP_GREATER, OpCode.OP_NOT),
+            TokenType.TOKEN_LESS => try self.emitOpCode(OpCode.OP_LESS),
+            TokenType.TOKEN_LESS_EQUAL => try self.emitOpCodes(OpCode.OP_GREATER, OpCode.OP_NOT),
             else => unreachable,
         }
     }
@@ -252,9 +249,9 @@ pub const Parser = struct {
     fn literal(self: *Parser, canAssing: bool) !void {
         switch (parser.previous.tokenType) {
             TokenType.TOKEN_FALSE => try self.emitOpCode(OpCode.OP_FALSE),
-            TokenType.TOKEN_TRUE  => try self.emitOpCode(OpCode.OP_TRUE),
-            TokenType.TOKEN_NIL   => try self.emitOpCode(OpCode.OP_NIL),
-            else  => unreachable,
+            TokenType.TOKEN_TRUE => try self.emitOpCode(OpCode.OP_TRUE),
+            TokenType.TOKEN_NIL => try self.emitOpCode(OpCode.OP_NIL),
+            else => unreachable,
         }
     }
 
@@ -283,7 +280,6 @@ pub const Parser = struct {
             getOp = OpCode.OP_GET_LOCAL;
             setOp = OpCode.OP_SET_LOCAL;
         } else {
-
             arg = try current.?.resolveUpvalue(name);
             if (arg != -1) {
                 getOp = OpCode.OP_GET_UPVALUE;
@@ -314,7 +310,7 @@ pub const Parser = struct {
         // Emit the operator instruction.
         switch (operatorType) {
             TokenType.TOKEN_MINUS => try self.emitOpCode(OpCode.OP_NEGATE),
-            TokenType.TOKEN_BANG  => try self.emitOpCode(OpCode.OP_NOT),
+            TokenType.TOKEN_BANG => try self.emitOpCode(OpCode.OP_NOT),
             else => unreachable,
         }
     }
@@ -323,10 +319,9 @@ pub const Parser = struct {
         self.advance();
         const prefixRule = self.getRule(self.previous.tokenType).prefix;
         if (prefixRule) |prefixFn| {
-
             const canAssign = @enumToInt(precedence) <= @enumToInt(Precedence.PREC_ASSIGNMENT);
             try prefixFn(self, canAssign);
-            
+
             while (@enumToInt(precedence) <= @enumToInt(self.getRule(self.current.tokenType).precedence)) {
                 self.advance();
                 const infixRule = self.getRule(self.previous.tokenType).infix;
@@ -358,7 +353,7 @@ pub const Parser = struct {
 
         if (current.?.locals.items.len > 0) {
             var i: usize = current.?.locals.items.len - 1;
-            while ( i >= 0 ) {
+            while (i >= 0) {
                 const local = current.?.locals.items[i];
                 if (local.depth != -1 and local.depth < current.?.scopeDepth) {
                     break;
@@ -451,7 +446,6 @@ pub const Parser = struct {
         // Compile the parameter list.
         self.consume(TokenType.TOKEN_LEFT_PAREN, "Expect '(' after function name.");
         if (!self.check(TokenType.TOKEN_RIGHT_PAREN)) {
-            
             try self.functionParam();
 
             while (self.match(TokenType.TOKEN_COMMA)) {
@@ -467,8 +461,8 @@ pub const Parser = struct {
         // Create the function object
         const fun = try current.?.endCompiler(); // switch to current outside compiler
         try self.emitBytes(@enumToInt(OpCode.OP_CLOSURE), try self.makeConstant(objFunction2Value(fun)));
-        var i : usize = 0;
-        while (i < fun.upvalueCount) : (i+=1) {
+        var i: usize = 0;
+        while (i < fun.upvalueCount) : (i += 1) {
             try self.emitByte(if (compiler.?.upvalues.items[i].isLocal) 1 else 0);
             try self.emitByte(@intCast(u8, compiler.?.upvalues.items[i].index));
         }
@@ -555,10 +549,7 @@ pub const Parser = struct {
             if (parser.previous.tokenType == TokenType.TOKEN_SEMICOLON) return;
 
             switch (parser.current.tokenType) {
-                TokenType.TOKEN_CLASS, TokenType.TOKEN_FUN, TokenType.TOKEN_VAR,
-                TokenType.TOKEN_FOR, TokenType.TOKEN_IF, TokenType.TOKEN_WHILE,
-                TokenType.TOKEN_PRINT, TokenType.TOKEN_RETURN
-                => return,
+                TokenType.TOKEN_CLASS, TokenType.TOKEN_FUN, TokenType.TOKEN_VAR, TokenType.TOKEN_FOR, TokenType.TOKEN_IF, TokenType.TOKEN_WHILE, TokenType.TOKEN_PRINT, TokenType.TOKEN_RETURN => return,
                 else => break,
             }
 

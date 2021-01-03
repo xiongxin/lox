@@ -6,29 +6,28 @@ usingnamespace @import("chunk.zig");
 usingnamespace @import("scanner.zig");
 usingnamespace @import("parser.zig");
 usingnamespace @import("gc.zig");
-usingnamespace @import("vm.zig");
+usingnamespace   @import("vm.zig");
 
 pub var heap: Heap = undefined;
 
 pub const Heap = struct {
-
     allocator: *std.mem.Allocator,
 
     pub fn init(allocator: *std.mem.Allocator) Heap {
-        return Heap {
+        return Heap{
             .allocator = allocator,
         };
     }
 
     fn create(self: *Heap, comptime T: type) !*T {
-        try collectGarage();
+        //try collectGarbage();
         const res = try self.allocator.create(T);
-        GCLOG.info("{} allocate {} for {}", .{@ptrToInt(res), @sizeOf(T), @typeName(T)});
+        //GCLOG.info("{} allocate {} for {}", .{ @ptrToInt(res), @sizeOf(T), @typeName(T) });
         return res;
     }
 
     fn destory(self: *Heap, ptr: anytype) void {
-        GCLOG.info("{} free type {}", .{@ptrToInt(ptr), @tagName((ptr.objType))});
+        //GCLOG.info("{} free type {}", .{ @ptrToInt(ptr), @tagName((ptr.objType)) });
 
         switch (ptr.objType) {
             .str => {
@@ -51,7 +50,7 @@ pub const Heap = struct {
                 next = on.next;
                 self.destory(on);
             }
-            
+
             self.destory(first);
         }
     }
@@ -78,19 +77,18 @@ pub const Heap = struct {
             objString.chars = str_array;
 
             setVmObjects(@ptrCast(*Obj, objString));
-            
-            try vm.strings.put(chars, objString);
+
+            try vm.strings.put(str_array, objString);
 
             return objString;
         }
     }
 
     pub fn newFunction(self: *Heap) !*ObjFunction {
-
         var function = try self.create(ObjFunction);
         function.obj = .{ .objType = .fun, .isMarked = false, .next = null };
         function.arity = 0;
-        function.name  = null;
+        function.name = null;
         function.chunk = try Chunk.init(self.allocator);
         function.upvalueCount = 0;
 
@@ -110,7 +108,7 @@ pub const Heap = struct {
         return closure;
     }
 
-    pub fn newUpvalue(self: *Heap, slot: *Value) !*ObjUpvalue  {
+    pub fn newUpvalue(self: *Heap, slot: *Value) !*ObjUpvalue {
         var upvalue = try self.create(ObjUpvalue);
         upvalue.obj = .{ .objType = .upvalue, .isMarked = false, .next = null };
         upvalue.location = slot;

@@ -6,12 +6,11 @@ usingnamespace @import("vm.zig");
 const process = std.process;
 const print = std.debug.print;
 
-
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     vm.init(allocator);
     defer vm.deinit();
-    
+
     var args = process.args();
     _ = args.skip(); // skip prog name
     const filename = args.next(allocator);

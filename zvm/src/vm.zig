@@ -7,10 +7,9 @@ usingnamespace @import("compiler.zig");
 usingnamespace @import("heap.zig");
 
 pub var vm: VM = undefined;
-
 pub const ObjStringHashOfValue = std.hash_map.AutoHashMap(*ObjString, Value);
-
 pub const ObjStringSet = std.hash_map.StringHashMap(*ObjString);
+pub const ArrayListOfObj = std.ArrayList(*Obj);
 
 const CallFrame = struct {
     closure: *ObjClosure,
@@ -47,7 +46,6 @@ const FRAMES_MAX = 64;
 const STACK_MAX = std.math.maxInt(u8) * FRAMES_MAX;
 
 pub const VM = struct {
-
     frames: [FRAMES_MAX]CallFrame,
     frameCount: usize,
 
@@ -59,15 +57,19 @@ pub const VM = struct {
     stackTop: usize,
     globals: ObjStringHashOfValue,
 
+    grayStack: ArrayListOfObj,
+
     pub fn init(self: *VM, allocator: *std.mem.Allocator) void {
         self.globals = ObjStringHashOfValue.init(allocator);
         self.strings = ObjStringSet.init(allocator);
+        self.grayStack = ArrayListOfObj.init(allocator);
         self.restStack();
     }
 
     pub fn deinit(self: *VM) void {
         self.globals.deinit();
         heap.freeObjects(self.objects);
+        self.grayStack.deinit();
     }
 
     fn restStack(self: *VM) void {
@@ -83,7 +85,7 @@ pub const VM = struct {
         while (true) {
             // 打印栈数据
             print("          ", .{});
-            for (self.stack[0 .. self.stackTop]) |item| {
+            for (self.stack[0..self.stackTop]) |item| {
                 print("[ ", .{});
                 try printValue(item);
                 print(" ]", .{});
@@ -103,9 +105,9 @@ pub const VM = struct {
                     vm.frameCount -= 1;
                     if (vm.frameCount == 0) {
                         const i: f64 = 1000.0;
-                        print("执行花费时间: {d:.5}秒\n", .{ std.math.divFloor(f64, @intToFloat(f64, (std.time.milliTimestamp() - start)), i) });
+                        print("执行花费时间: {d:.5}秒\n", .{std.math.divFloor(f64, @intToFloat(f64, (std.time.milliTimestamp() - start)), i)});
                         return InterpretResult.INTERPRET_OK;
-                    }                
+                    }
                     vm.stackTop = frame.lastStackTop;
                     self.push(result);
                     frame = &vm.frames[vm.frameCount - 1];
@@ -114,20 +116,20 @@ pub const VM = struct {
                     const constant = frame.readConstant();
                     self.push(constant);
                 },
-                OpCode.OP_NIL   => self.push(nil2Value()),
-                OpCode.OP_TRUE  => self.push(bool2Value(true)),
+                OpCode.OP_NIL => self.push(nil2Value()),
+                OpCode.OP_TRUE => self.push(bool2Value(true)),
                 OpCode.OP_FALSE => self.push(bool2Value(false)),
-                OpCode.OP_NOT   => self.push(bool2Value(isFalsey(self.pop()))),
-                OpCode.OP_POP   => _ = self.pop(),
-                OpCode.OP_GET_LOCAL     => {
+                OpCode.OP_NOT => self.push(bool2Value(isFalsey(self.pop()))),
+                OpCode.OP_POP => _ = self.pop(),
+                OpCode.OP_GET_LOCAL => {
                     const slot = frame.readByte();
                     self.push(frame.slots[slot]);
                 },
-                OpCode.OP_SET_LOCAL     => {
+                OpCode.OP_SET_LOCAL => {
                     const slot = frame.readByte();
                     frame.slots[slot] = self.peek(0);
                 },
-                OpCode.OP_GET_GLOBAL    => {
+                OpCode.OP_GET_GLOBAL => {
                     const name = frame.readString();
                     if (self.globals.get(name)) |value| {
                         self.push(value);
@@ -136,7 +138,7 @@ pub const VM = struct {
                         return InterpretResult.INTERPRET_RUNTIME_ERROR;
                     }
                 },
-                OpCode.OP_SET_GLOBAL    => {
+                OpCode.OP_SET_GLOBAL => {
                     const name = frame.readString();
                     if (self.globals.get(name)) |_| {
                         try self.globals.put(name, self.peek(0));
@@ -155,8 +157,12 @@ pub const VM = struct {
                     const a = self.pop();
                     self.push(bool2Value(valuesEqual(a, b)));
                 },
-                OpCode.OP_ADD, OpCode.OP_SUBTRACT, OpCode.OP_MULTIPLY, OpCode.OP_DIVIDE,
-                OpCode.OP_GREATER, OpCode.OP_LESS,
+                OpCode.OP_ADD,
+                OpCode.OP_SUBTRACT,
+                OpCode.OP_MULTIPLY,
+                OpCode.OP_DIVIDE,
+                OpCode.OP_GREATER,
+                OpCode.OP_LESS,
                 => {
                     if (!isNumber(self.peek(0)) or !isNumber(self.peek(1))) {
                         self.runtimeError("Operands must be numbers.", .{});
@@ -174,7 +180,7 @@ pub const VM = struct {
                 },
                 OpCode.OP_JUMP_IF_FALSE => {
                     const offset = frame.readShort();
-                    if (isFalsey(self.peek(0))) 
+                    if (isFalsey(self.peek(0)))
                         frame.ip += offset;
                 },
                 OpCode.OP_JUMP => {
@@ -197,10 +203,10 @@ pub const VM = struct {
                     const closure = try heap.newClosure(fun);
                     self.push(objClosure2Value(closure));
 
-                    var i : usize = 0;
-                    while(i < closure.fun.upvalueCount) : (i += 1) {
+                    var i: usize = 0;
+                    while (i < closure.fun.upvalueCount) : (i += 1) {
                         const isLocal = frame.readByte();
-                        const index   = frame.readByte();
+                        const index = frame.readByte();
                         if (isLocal == 1) {
                             try closure.upvalues.append((try self.captureUpvalue(&frame.slots[index])));
                         } else {
@@ -218,7 +224,7 @@ pub const VM = struct {
                 },
                 OpCode.OP_CLOSE_UPVALUE => {
                     //self.closeUpvalues(&self.peek(0));
-                }
+                },
             }
         }
     }
@@ -236,9 +242,9 @@ pub const VM = struct {
         var preUpvalue: ?*ObjUpvalue = null;
         var upvalue = vm.openUpvalue;
 
-        while ( upvalue != null and @ptrToInt(upvalue.?.location) > @ptrToInt(local) ) {
+        while (upvalue != null and @ptrToInt(upvalue.?.location) > @ptrToInt(local)) {
             preUpvalue = upvalue;
-            upvalue    = upvalue.?.next;
+            upvalue = upvalue.?.next;
         }
 
         if (upvalue != null and upvalue.?.location == local) {
@@ -267,10 +273,8 @@ pub const VM = struct {
     }
 
     fn call(self: *VM, closure: *ObjClosure, argCount: u8) bool {
-
         if (argCount != closure.fun.arity) {
-            self.runtimeError("Expected {} arguments but got {}.",
-                        .{ closure.fun.arity, argCount });
+            self.runtimeError("Expected {} arguments but got {}.", .{ closure.fun.arity, argCount });
             return false;
         }
 
@@ -282,8 +286,8 @@ pub const VM = struct {
         var frame = &vm.frames[vm.frameCount];
         frame.closure = closure;
         frame.ip = 0;
-        frame.slots = self.stack[self.stackTop - argCount - 1 .. ];
-        frame.lastStackTop = self.stackTop  - argCount - 1;
+        frame.slots = self.stack[self.stackTop - argCount - 1 ..];
+        frame.lastStackTop = self.stackTop - argCount - 1;
 
         vm.frameCount += 1;
 
@@ -300,11 +304,10 @@ pub const VM = struct {
             OpCode.OP_MULTIPLY => self.push(number2Value(a * b)),
             OpCode.OP_DIVIDE => self.push(number2Value(a / b)),
             OpCode.OP_GREATER => self.push(bool2Value(a > b)),
-            OpCode.OP_LESS    => self.push(bool2Value(a < b)),   
-            else => unreachable,         
+            OpCode.OP_LESS => self.push(bool2Value(a < b)),
+            else => unreachable,
         }
     }
-
 
     fn push(self: *VM, value: Value) void {
         self.stack[self.stackTop] = value;
@@ -345,11 +348,8 @@ pub const VM = struct {
     }
 };
 
-
 pub const InterpretResult = enum(u2) {
-    INTERPRET_OK,
-    INTERPRET_COMPILE_ERROR,
-    INTERPRET_RUNTIME_ERROR
+    INTERPRET_OK, INTERPRET_COMPILE_ERROR, INTERPRET_RUNTIME_ERROR
 };
 
 pub fn interpret(allocator: *std.mem.Allocator, source: []const u8) !InterpretResult {
@@ -368,6 +368,4 @@ pub fn interpret(allocator: *std.mem.Allocator, source: []const u8) !InterpretRe
     } else {
         return InterpretResult.INTERPRET_COMPILE_ERROR;
     }
-
-    
 }

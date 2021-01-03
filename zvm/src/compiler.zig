@@ -16,7 +16,7 @@ pub const Local = struct {
     isCaptured: bool,
 
     fn init(name: Token, depth: i32) Local {
-        return Local { .name = name, .depth = depth };
+        return Local{ .name = name, .depth = depth };
     }
 };
 
@@ -26,8 +26,7 @@ const Upvalue = struct {
 };
 
 pub const FunctionType = enum {
-    TYPE_FUNCTION,
-    TYPE_SCRIPT
+    TYPE_FUNCTION, TYPE_SCRIPT
 };
 
 const ArrayListOfUpvalue = std.ArrayList(Upvalue);
@@ -63,8 +62,9 @@ pub const Compiler = struct {
     pub fn endScope(self: *Compiler) !void {
         self.scopeDepth -= 1;
 
-        while (current.?.locals.items.len > 0 and 
-                current.?.locals.items[current.?.locals.items.len - 1].depth > current.?.scopeDepth) {
+        while (current.?.locals.items.len > 0 and
+            current.?.locals.items[current.?.locals.items.len - 1].depth > current.?.scopeDepth)
+        {
             if (self.locals.items[self.locals.items.len - 1].isCaptured) {
                 try parser.emitOpCode(OpCode.OP_CLOSE_UPVALUE);
             } else {
@@ -75,7 +75,7 @@ pub const Compiler = struct {
     }
 
     pub fn addLocal(self: *Compiler, name: Token) !void {
-        try self.locals.append(Local {
+        try self.locals.append(Local{
             .name = name,
             .depth = -1,
             .isCaptured = false,
@@ -116,7 +116,7 @@ pub const Compiler = struct {
                 return @intCast(i32, try self.addUpvalue(@intCast(usize, upvalue), false));
             }
         }
-            
+
         return -1;
     }
 
@@ -124,14 +124,14 @@ pub const Compiler = struct {
         const upvalueCount = self.function.?.upvalueCount;
 
         var i: usize = 0;
-        while ( i < upvalueCount) : (i += 1) {
-            const upvalue = self.upvalues.items[i] ;
+        while (i < upvalueCount) : (i += 1) {
+            const upvalue = self.upvalues.items[i];
             if (upvalue.index == index and upvalue.isLocal == isLocal) {
                 return i;
             }
         }
 
-        try self.upvalues.append(Upvalue { .index = index, .isLocal = isLocal });
+        try self.upvalues.append(Upvalue{ .index = index, .isLocal = isLocal });
         self.function.?.upvalueCount += 1;
         return upvalueCount;
     }
@@ -182,9 +182,9 @@ pub fn initCompiler(allocator: *std.mem.Allocator, ft: FunctionType) !void {
         current.?.function.?.name = try heap.copyString(parser.previous.literal);
     }
 
-    var local = Local {
+    var local = Local{
         .depth = 0,
-        .name  = Token { 
+        .name = Token{
             .tokenType = TokenType.TOKEN_FUN,
             .line = 0,
             .literal = "",
@@ -199,7 +199,7 @@ pub fn compile(allocator: *std.mem.Allocator, source: []const u8) !?*ObjFunction
     Scanner.init(source);
 
     try initCompiler(allocator, FunctionType.TYPE_SCRIPT);
-    
+
     parser = Parser.init();
     parser.advance();
 
