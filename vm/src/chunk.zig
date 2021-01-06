@@ -20,7 +20,7 @@ pub const Chunk = struct {
     lines: ArrayListOfUsize,
 
     pub fn init(allocator: *std.mem.Allocator) Chunk {
-        return Chunk {
+        return Chunk{
             .code = ArrayListOfU8.init(allocator),
             .constants = ArrayListOfValue.init(allocator),
             .lines = ArrayListOfUsize.init(allocator),
@@ -50,7 +50,7 @@ pub const Chunk = struct {
     pub fn disassemble(self: *Chunk, name: []const u8) void {
         print("{:=^50}\n", .{name});
 
-        var offset : usize = 0;
+        var offset: usize = 0;
         while (offset < self.code.items.len) {
             offset = self.disassembleInstruction(offset);
         }
@@ -59,30 +59,35 @@ pub const Chunk = struct {
     }
 
     pub fn disassembleInstruction(self: *Chunk, offset: usize) usize {
-        print("{:0>4} ", .{ offset });
+        print("{:0>4} ", .{offset});
 
         if (offset > 0 and self.lines.items[offset] == self.lines.items[offset - 1]) {
             print("   | ", .{});
         } else {
-            print("{:0>4} ", .{ self.lines.items[offset] });
+            print("{:0>4} ", .{self.lines.items[offset]});
         }
 
         const instruction = @intToEnum(OpCode, self.code.items[offset]);
         switch (instruction) {
-            .OP_RETURN, .OP_NEGATE,  .OP_ADD, .OP_SUBTRACT, .OP_MULTIPLY, .OP_DIVIDE,
+            .OP_RETURN,
+            .OP_NEGATE,
+            .OP_ADD,
+            .OP_SUBTRACT,
+            .OP_MULTIPLY,
+            .OP_DIVIDE,
             => return simpleInstruction(@tagName(instruction), offset),
-            .OP_CONSTANT => return self.constantInstruction(@tagName(instruction), offset)
+            .OP_CONSTANT => return self.constantInstruction(@tagName(instruction), offset),
         }
     }
 
     fn simpleInstruction(name: []const u8, offset: usize) usize {
-        print("{:<16}\n", .{ name });
+        print("{:<16}\n", .{name});
         return offset + 1;
     }
 
     fn constantInstruction(self: *Chunk, name: []const u8, offset: usize) usize {
         const constant = self.code.items[offset + 1];
-        print("{:<16} {} '", .{ name, constant});
+        print("{:<16} {} '", .{ name, constant });
         printValue(self.constants.items[constant]);
         print("'\n", .{});
         return offset + 2;

@@ -4,15 +4,13 @@ const print = std.debug.print;
 usingnamespace @import("common.zig");
 usingnamespace @import("value.zig");
 usingnamespace @import("chunk.zig");
+usingnamespace @import("compiler.zig");
 
 pub const InterpretResult = enum {
-    INTERPRET_OK,
-    INTERPRET_COMPILE_ERROR,
-    INTERPRET_RUNTIME_ERROR
+    INTERPRET_OK, INTERPRET_COMPILE_ERROR, INTERPRET_RUNTIME_ERROR
 };
 
 const STACK_MAX = 256;
-
 
 pub const VM = struct {
     chunk: *Chunk,
@@ -23,10 +21,10 @@ pub const VM = struct {
 
     allocator: *std.mem.Allocator,
 
-    pub fn init(allocator: *std.mem.Allocator, chunk: *Chunk) VM {
-        return VM {
-            .chunk = chunk,
-            .ip = chunk.code.items.ptr,
+    pub fn init(allocator: *std.mem.Allocator) VM {
+        return VM{
+            .chunk = undefined,
+            .ip = undefined, //chunk.code.items.ptr,
             .stack = undefined,
             .stackTop = undefined,
             .allocator = allocator,
@@ -37,12 +35,13 @@ pub const VM = struct {
         self.stackTop = &self.stack;
     }
 
-    pub fn deinit(self: *VM) void {
+    pub fn deinit(self: *VM) void {}
 
-    }
+    pub fn interpret(self: *VM, source: []const u8) InterpretResult {
+        self.compile(source);
 
-    pub fn interpret(self: *VM) InterpretResult {
-        return self.run();
+        // return self.run();
+        return InterpretResult.INTERPRET_OK;
     }
 
     fn push(self: *VM, value: Value) void {
@@ -57,11 +56,9 @@ pub const VM = struct {
 
     fn run(self: *VM) InterpretResult {
         while (true) {
-
             if (DEBUG_TRACE_EXECUTION) {
-
                 print("          ", .{});
-                var slot : [*]Value = &self.stack;
+                var slot: [*]Value = &self.stack;
                 while (@ptrToInt(slot) < @ptrToInt(self.stackTop)) {
                     print("[ ", .{});
                     printValue(slot[0]);
@@ -70,8 +67,7 @@ pub const VM = struct {
                 }
                 print("\n", .{});
 
-                _ = self.chunk.disassembleInstruction(
-                    @ptrToInt(self.ip) - @ptrToInt(self.chunk.code.items.ptr));
+                _ = self.chunk.disassembleInstruction(@ptrToInt(self.ip) - @ptrToInt(self.chunk.code.items.ptr));
             }
 
             const instruction = @intToEnum(OpCode, self.readByte());
@@ -80,7 +76,11 @@ pub const VM = struct {
                     const constant = self.readConstant();
                     self.push(constant);
                 },
-                .OP_ADD, .OP_SUBTRACT, .OP_MULTIPLY, .OP_DIVIDE, => self.binaryOp(instruction),
+                .OP_ADD,
+                .OP_SUBTRACT,
+                .OP_MULTIPLY,
+                .OP_DIVIDE,
+                => self.binaryOp(instruction),
                 .OP_NEGATE => {
                     self.push(-self.pop());
                 },
@@ -88,7 +88,7 @@ pub const VM = struct {
                     printValue(self.pop());
                     print("\n", .{});
                     return .INTERPRET_OK;
-                }
+                },
             }
         }
     }
@@ -98,13 +98,13 @@ pub const VM = struct {
         const a = self.pop();
 
         switch (op) {
-            .OP_ADD => self.push(a + b), 
-            .OP_SUBTRACT => self.push(a - b), 
-            .OP_MULTIPLY, => self.push( a * b),
+            .OP_ADD => self.push(a + b),
+            .OP_SUBTRACT => self.push(a - b),
+            .OP_MULTIPLY => self.push(a * b),
             .OP_DIVIDE => self.push(a / b),
             else => unreachable,
         }
-    }   
+    }
 
     fn readConstant(self: *VM) Value {
         const index = self.readByte();
@@ -115,5 +115,11 @@ pub const VM = struct {
         var res = self.ip[0];
         self.ip += 1;
         return res;
+    }
+
+    fn compile(self: *VM, source: []const u8) void {
+        var compiler = Compiler.init();
+
+        compiler.compile(source);
     }
 };
