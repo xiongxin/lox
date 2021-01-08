@@ -5,28 +5,32 @@ usingnamespace @import("common.zig");
 usingnamespace @import("value.zig");
 usingnamespace @import("chunk.zig");
 usingnamespace @import("scanner.zig");
+usingnamespace @import("parser.zig");
+usingnamespace @import("vm.zig");
 
 pub const Compiler = struct {
-    pub fn init() Compiler {
-        return Compiler{};
+    vm: *VM,
+    chunk: *Chunk,
+
+    pub fn init(
+        vm: *VM,
+        chunk: *Chunk,
+    ) Compiler {
+        return Compiler{
+            .chunk = chunk,
+            .vm = vm,
+        };
     }
 
-    pub fn compile(self: *Compiler, source: []const u8) void {
+    pub fn compile(self: *Compiler, source: []const u8) !bool {
         var scanner = Scanner.init(source);
+        var parser = Parser.init(self, &scanner);
 
-        var line: usize = 0;
-        while (true) {
-            const token = scanner.scanToken();
-            if (token.line != line) {
-                print("{:>4} ", .{token.line});
-                line = token.line;
-            } else {
-                print("   | ", .{});
-            }
+        parser.advance();
+        try parser.expression();
+        parser.consume(.TOKEN_EOF, "Expect end of expression");
 
-            print("{:>2} '{}'\n", .{ token.tokeType, token.literal });
-
-            if (token.tokeType == .TOKEN_EOF) break;
-        }
+        try parser.endParse();
+        return !parser.hadError;
     }
 };

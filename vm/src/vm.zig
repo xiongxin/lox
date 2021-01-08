@@ -37,11 +37,17 @@ pub const VM = struct {
 
     pub fn deinit(self: *VM) void {}
 
-    pub fn interpret(self: *VM, source: []const u8) InterpretResult {
-        self.compile(source);
+    pub fn interpret(self: *VM, source: []const u8) !InterpretResult {
+        var chunk = Chunk.init(self.allocator);
+        defer chunk.deinit();
+        if (!(try self.compile(source, &chunk))) {
+            return .INTERPRET_RUNTIME_ERROR;
+        }
 
-        // return self.run();
-        return InterpretResult.INTERPRET_OK;
+        self.chunk = &chunk;
+        self.ip = self.chunk.code.items.ptr;
+
+        return self.run();
     }
 
     fn push(self: *VM, value: Value) void {
@@ -117,9 +123,8 @@ pub const VM = struct {
         return res;
     }
 
-    fn compile(self: *VM, source: []const u8) void {
-        var compiler = Compiler.init();
-
-        compiler.compile(source);
+    fn compile(self: *VM, source: []const u8, chunk: *Chunk) !bool {
+        var compiler = Compiler.init(self, chunk);
+        return try compiler.compile(source);
     }
 };

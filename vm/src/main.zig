@@ -34,7 +34,7 @@ fn repl(allocator: *std.mem.Allocator, vm: *VM) !void {
     while (stdIn.read(&buf)) |len| {
         var slice = buf[0 .. len + 1];
         slice[len] = 0;
-        _ = vm.interpret(slice);
+        _ = try vm.interpret(slice);
         print("> ", .{});
     } else |err| {
         process.exit(74);
@@ -48,5 +48,5 @@ fn runFile(allocator: *std.mem.Allocator, path: []const u8, vm: *VM) !void {
     defer allocator.free(buf);
     const size = try file.readAll(buf);
     buf[filesize] = 0;
-    _ = vm.interpret(buf);
+    _ = try vm.interpret(buf);
 }

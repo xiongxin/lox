@@ -6,7 +6,7 @@ usingnamespace @import("value.zig");
 usingnamespace @import("chunk.zig");
 
 pub const Token = struct {
-    tokeType: TokenType,
+    tokenType: TokenType,
     literal: []const u8,
     line: usize,
 };
@@ -166,7 +166,7 @@ pub const Scanner = struct {
 
     fn makeToken(self: *Scanner, tokenType: TokenType) Token {
         return Token{
-            .tokeType = tokenType,
+            .tokenType = tokenType,
             .literal = self.start[0 .. @ptrToInt(self.current) - @ptrToInt(self.start)],
             .line = self.line,
         };
@@ -174,7 +174,7 @@ pub const Scanner = struct {
 
     fn errorToken(self: *Scanner, message: []const u8) Token {
         return Token{
-            .tokeType = .TOKEN_ERROR,
+            .tokenType = .TOKEN_ERROR,
             .literal = message,
             .line = self.line,
         };
