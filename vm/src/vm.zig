@@ -60,6 +60,21 @@ pub const VM = struct {
         return self.stackTop[0];
     }
 
+    fn peek(self: *VM, distance: usize) Value {
+        const value = self.stackTop - 1 - distance;
+        return value[0];
+    }
+
+    fn runtimeError(self: *VM, comptime format: []const u8, args: anytype) void {
+        print(format, args);
+        print("\n", .{});
+        const instruction = @ptrToInt(self.ip) - @ptrToInt(self.chunk.code.items.ptr) - 1;
+        const line = self.chunk.lines.items[instruction];
+        print("[line {}] in script\n", .{line});
+
+        self.restStack();
+    }
+
     fn run(self: *VM) InterpretResult {
         while (true) {
             if (DEBUG_TRACE_EXECUTION) {
@@ -82,13 +97,30 @@ pub const VM = struct {
                     const constant = self.readConstant();
                     self.push(constant);
                 },
+                .OP_NIL => self.push(NIL_VAL()),
+                .OP_FALSE => self.push(BOOL_VAL(false)),
+                .OP_TRUE => self.push(BOOL_VAL(true)),
                 .OP_ADD,
                 .OP_SUBTRACT,
                 .OP_MULTIPLY,
                 .OP_DIVIDE,
-                => self.binaryOp(instruction),
+                => {
+                    if (!IS_NUMBER(self.peek(0)) or !IS_NUMBER(self.peek(1))) {
+                        self.runtimeError("Operands must be a numbers", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    } else {
+                        self.binaryOp(instruction);
+                    }
+                },
+                .OP_NOT => {
+                    self.push(BOOL_VAL(isFalsey(self.pop())));
+                },
                 .OP_NEGATE => {
-                    self.push(-self.pop());
+                    if (!IS_NUMBER(self.peek(0))) {
+                        self.runtimeError("Operand must be a number", .{});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                    self.push(NUMBER_VAL(-AS_NUMBER(self.pop())));
                 },
                 .OP_RETURN => {
                     printValue(self.pop());
@@ -100,14 +132,14 @@ pub const VM = struct {
     }
 
     fn binaryOp(self: *VM, op: OpCode) void {
-        const b = self.pop();
-        const a = self.pop();
+        const b = AS_NUMBER(self.pop());
+        const a = AS_NUMBER(self.pop());
 
         switch (op) {
-            .OP_ADD => self.push(a + b),
-            .OP_SUBTRACT => self.push(a - b),
-            .OP_MULTIPLY => self.push(a * b),
-            .OP_DIVIDE => self.push(a / b),
+            .OP_ADD => self.push(NUMBER_VAL(a + b)),
+            .OP_SUBTRACT => self.push(NUMBER_VAL(a - b)),
+            .OP_MULTIPLY => self.push(NUMBER_VAL(a * b)),
+            .OP_DIVIDE => self.push(NUMBER_VAL(a / b)),
             else => unreachable,
         }
     }
@@ -126,5 +158,9 @@ pub const VM = struct {
     fn compile(self: *VM, source: []const u8, chunk: *Chunk) !bool {
         var compiler = Compiler.init(self, chunk);
         return try compiler.compile(source);
+    }
+
+    fn isFalsey(value: Value) bool {
+        return IS_NIL(value) or (IS_BOOL(value) and !AS_BOOL(value));
     }
 };

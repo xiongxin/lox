@@ -40,34 +40,34 @@ const ParseRule = struct {
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_SEMICOLON
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_FACTOR }, //TOKEN_SLASH
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_FACTOR }, //TOKEN_STAR
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
+        .{ .prefix = Parser.unary, .infix = null, .precedence = .PREC_NONE }, //TOKEN_BANG
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_BANG_EQUAL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_EQUAL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_EQUAL_EQUAL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_GREATER
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_GREATER_EQUAL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_LESS
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_LESS_EQUAL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_IDENTIFIER
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_STRING
         .{ .prefix = Parser.number, .infix = null, .precedence = .PREC_NONE }, //TOKEN_NUMBER
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_AND
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE },
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_CLASS
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_ELSE
+        .{ .prefix = Parser.literal, .infix = null, .precedence = .PREC_NONE }, //TOKEN_FALSE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_FOR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_FUN
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_IF
+        .{ .prefix = Parser.literal, .infix = null, .precedence = .PREC_NONE }, //TOKEN_NIL
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_OR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_PRINT
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_RETURN
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_SUPER
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_THIS
+        .{ .prefix = Parser.literal, .infix = null, .precedence = .PREC_NONE }, // TOKEN_TRUE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_VAR
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_WHILE
+        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_ERROR
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_EOF
     };
 
@@ -120,9 +120,18 @@ pub const Parser = struct {
         self.errorAtCurrent(message);
     }
 
+    fn literal(self: *Parser) !void {
+        switch (self.previous.tokenType) {
+            .TOKEN_FALSE => try self.emitCode(.OP_FALSE),
+            .TOKEN_NIL => try self.emitCode(.OP_NIL),
+            .TOKEN_TRUE => try self.emitCode(.OP_TRUE),
+            else => unreachable,
+        }
+    }
+
     fn number(self: *Parser) !void {
-        const value = try std.fmt.parseFloat(Value, self.previous.literal);
-        try self.emitConstant(value);
+        const value = try std.fmt.parseFloat(f64, self.previous.literal);
+        try self.emitConstant(NUMBER_VAL(value));
     }
 
     fn grouping(self: *Parser) !void {
@@ -157,6 +166,7 @@ pub const Parser = struct {
         // Emit the operator instruction.
         switch (operatorType) {
             .TOKEN_MINUS => try self.emitCode(.OP_NEGATE),
+            .TOKEN_BANG => try self.emitCode(.OP_NOT),
             else => unreachable,
         }
     }
