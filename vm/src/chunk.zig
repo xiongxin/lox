@@ -86,6 +86,9 @@ pub const Chunk = struct {
             .OP_TRUE,
             .OP_FALSE,
             .OP_NOT,
+            .OP_GREATER,
+            .OP_LESS,
+            .OP_EQUAL,
             => return simpleInstruction(@tagName(instruction), offset),
             .OP_CONSTANT => return self.constantInstruction(@tagName(instruction), offset),
         }

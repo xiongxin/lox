@@ -4,6 +4,7 @@ const print = std.debug.print;
 
 usingnamespace @import("chunk.zig");
 usingnamespace @import("vm.zig");
+usingnamespace @import("common.zig");
 
 pub fn main() anyerror!void {
     var memory: [1024 * 1024]u8 = undefined;
@@ -12,6 +13,7 @@ pub fn main() anyerror!void {
 
     var vm = VM.init(&arena.allocator);
     defer vm.deinit();
+    vm.heap = Heap.init(&vm);
     vm.restStack();
 
     var args = process.args();

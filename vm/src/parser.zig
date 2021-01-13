@@ -6,6 +6,7 @@ usingnamespace @import("value.zig");
 usingnamespace @import("chunk.zig");
 usingnamespace @import("scanner.zig");
 usingnamespace @import("compiler.zig");
+usingnamespace @import("vm.zig");
 
 const Precedence = enum {
     PREC_NONE, //
@@ -41,15 +42,15 @@ const ParseRule = struct {
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_FACTOR }, //TOKEN_SLASH
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_FACTOR }, //TOKEN_STAR
         .{ .prefix = Parser.unary, .infix = null, .precedence = .PREC_NONE }, //TOKEN_BANG
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_BANG_EQUAL
+        .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_EQUALITY }, //TOKEN_BANG_EQUAL
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_EQUAL
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_EQUAL_EQUAL
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_GREATER
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_GREATER_EQUAL
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_LESS
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_LESS_EQUAL
+        .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_EQUALITY }, //TOKEN_EQUAL_EQUAL
+        .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_GREATER
+        .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_GREATER_EQUAL
+        .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_LESS
+        .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_LESS_EQUAL
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_IDENTIFIER
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_STRING
+        .{ .prefix = Parser.string, .infix = null, .precedence = .PREC_NONE }, //TOKEN_STRING
         .{ .prefix = Parser.number, .infix = null, .precedence = .PREC_NONE }, //TOKEN_NUMBER
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_AND
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_CLASS
@@ -84,6 +85,7 @@ pub const Parser = struct {
     previous: Token,
     hadError: bool,
     panicMode: bool,
+    vm: *VM,
 
     pub fn init(compiler: *Compiler, scanner: *Scanner) Parser {
         return Parser{
@@ -93,6 +95,7 @@ pub const Parser = struct {
             .previous = undefined,
             .hadError = false,
             .panicMode = false,
+            .vm = compiler.vm,
         };
     }
 
@@ -134,6 +137,10 @@ pub const Parser = struct {
         try self.emitConstant(NUMBER_VAL(value));
     }
 
+    fn string(self: *Parser) !void {
+        try self.emitConstant(OBJ_VAL(@ptrCast(*Obj, try self.vm.heap.copyString(self.previous.literal[1 .. self.previous.literal.len - 1]))));
+    }
+
     fn grouping(self: *Parser) !void {
         try self.expression();
         self.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
@@ -153,6 +160,12 @@ pub const Parser = struct {
             .TOKEN_MINUS => try self.emitCode(.OP_SUBTRACT),
             .TOKEN_STAR => try self.emitCode(.OP_MULTIPLY),
             .TOKEN_SLASH => try self.emitCode(.OP_DIVIDE),
+            .TOKEN_BANG_EQUAL => try self.emitBytes(@enumToInt(OpCode.OP_EQUAL), @enumToInt(OpCode.OP_NOT)),
+            .TOKEN_EQUAL_EQUAL => try self.emitCode(.OP_EQUAL),
+            .TOKEN_GREATER => try self.emitCode(.OP_GREATER),
+            .TOKEN_GREATER_EQUAL => try self.emitBytes(@enumToInt(OpCode.OP_LESS), @enumToInt(OpCode.OP_NOT)),
+            .TOKEN_LESS => try self.emitCode(.OP_LESS),
+            .TOKEN_LESS_EQUAL => try self.emitBytes(@enumToInt(OpCode.OP_GREATER), @enumToInt(OpCode.OP_NOT)),
             else => unreachable,
         }
     }
