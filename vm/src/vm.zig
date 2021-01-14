@@ -23,6 +23,8 @@ pub const VM = struct {
 
     heap: Heap,
     objects: ?*Obj, // 全局分配的所有对象集合
+    strings: String2OjStringMap, // 字符串常量池
+    globals: ObjString2Value, // 全局变量
 
     pub fn init(allocator: *std.mem.Allocator) VM {
         return VM{
@@ -33,6 +35,8 @@ pub const VM = struct {
             .allocator = allocator,
             .heap = undefined,
             .objects = null,
+            .strings = String2OjStringMap.init(allocator),
+            .globals = ObjString2Value.init(allocator),
         };
     }
 
@@ -40,7 +44,10 @@ pub const VM = struct {
         self.stackTop = &self.stack;
     }
 
-    pub fn deinit(self: *VM) void {}
+    pub fn deinit(self: *VM) void {
+        self.strings.deinit();
+        self.globals.deinit();
+    }
 
     pub fn interpret(self: *VM, source: []const u8) !InterpretResult {
         var chunk = Chunk.init(self.allocator);
@@ -110,6 +117,30 @@ pub const VM = struct {
                     const a = self.pop();
                     self.push(BOOL_VAL(valuesEqual(a, b)));
                 },
+                .OP_POP => _ = self.pop(),
+                .OP_DEFINE_GLOBAL => {
+                    const name = self.readString();
+                    try self.globals.put(name, self.peek(0));
+                    _ = self.pop();
+                },
+                .OP_GET_GLOBAL => {
+                    const name = self.readString();
+                    if (self.globals.get(name)) |value| {
+                        self.push(value);
+                    } else {
+                        self.runtimeError("Undefined variable '{}'", .{name.chars});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                },
+                .OP_SET_GLOBAL => {
+                    const name = self.readString();
+                    if (self.globals.get(name)) |value| {
+                        try self.globals.put(name, self.peek(0));
+                    } else {
+                        self.runtimeError("Undefined variable '{}'", .{name.chars});
+                        return .INTERPRET_RUNTIME_ERROR;
+                    }
+                },
                 .OP_ADD,
                 .OP_SUBTRACT,
                 .OP_MULTIPLY,
@@ -144,9 +175,11 @@ pub const VM = struct {
                     }
                     self.push(NUMBER_VAL(-AS_NUMBER(self.pop())));
                 },
-                .OP_RETURN => {
+                .OP_PRINT => {
                     printValue(self.pop());
                     print("\n", .{});
+                },
+                .OP_RETURN => {
                     return .INTERPRET_OK;
                 },
             }
@@ -160,7 +193,8 @@ pub const VM = struct {
         const arrayChars = try self.allocator.alloc(u8, a.chars.len + b.chars.len);
         std.mem.copy(u8, arrayChars, a.chars);
         std.mem.copy(u8, arrayChars[a.chars.len..], b.chars);
-        self.push(OBJ_VAL(@ptrCast(*Obj, try self.heap.copyString(arrayChars))));
+
+        self.push(OBJ_VAL(@ptrCast(*Obj, try self.heap.takeString(arrayChars))));
     }
 
     fn binaryOp(self: *VM, op: OpCode) void {
@@ -179,14 +213,17 @@ pub const VM = struct {
     }
 
     fn readConstant(self: *VM) Value {
-        const index = self.readByte();
-        return self.chunk.constants.items[index];
+        return self.chunk.constants.items[self.readByte()];
     }
 
     fn readByte(self: *VM) u8 {
         var res = self.ip[0];
         self.ip += 1;
         return res;
+    }
+
+    fn readString(self: *VM) *ObjString {
+        return AS_STRING(self.readConstant());
     }
 
     fn compile(self: *VM, source: []const u8, chunk: *Chunk) !bool {
@@ -197,37 +234,5 @@ pub const VM = struct {
     // nil and false is false
     fn isFalsey(value: Value) bool {
         return IS_NIL(value) or (IS_BOOL(value) and !AS_BOOL(value));
-    }
-
-    fn valuesEqual(a: Value, b: Value) bool {
-        switch (a) {
-            .boolean => |boolean| {
-                if (IS_BOOL(b)) {
-                    return AS_BOOL(b) == boolean;
-                } else {
-                    return false;
-                }
-            },
-            .number => |number| {
-                if (IS_NUMBER(b)) {
-                    return AS_NUMBER(b) == number;
-                } else {
-                    return false;
-                }
-            },
-            .nil => {
-                return if (IS_NIL(b)) true else false;
-            },
-            .obj => |obj| {
-                if (IS_STRING(b)) {
-                    const aStr = OBJ_AS_STRING(obj);
-                    const bStr = AS_STRING(b);
-
-                    return std.mem.eql(u8, aStr.chars, bStr.chars);
-                } else {
-                    return false;
-                }
-            },
-        }
     }
 };

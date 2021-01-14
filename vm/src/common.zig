@@ -6,6 +6,8 @@ usingnamespace @import("vm.zig");
 pub const ArrayListOfU8 = std.ArrayList(u8);
 pub const ArrayListOfValue = std.ArrayList(Value);
 pub const ArrayListOfUsize = std.ArrayList(usize);
+pub const String2OjStringMap = std.StringHashMap(*ObjString);
+pub const ObjString2Value = std.AutoHashMap(*ObjString, Value);
 pub const DEBUG_TRACE_EXECUTION = true;
 pub const DEBUG_PRINT_CODE = true;
 
@@ -21,10 +23,26 @@ pub const Heap = struct {
     }
 
     pub fn copyString(self: *Heap, chars: []const u8) !*ObjString {
+        if (self.vm.strings.get(chars)) |v| {
+            return v;
+        }
+
         const heapChars = try self.allocator.alloc(u8, chars.len);
         std.mem.copy(u8, heapChars, chars);
 
-        return self.allocateString(heapChars);
+        const res = try self.allocateString(heapChars);
+        try self.vm.strings.put(heapChars, res);
+
+        return res;
+    }
+
+    pub fn takeString(self: *Heap, chars: []u8) !*ObjString {
+        if (self.vm.strings.get(chars)) |v| {
+            self.allocator.free(chars);
+            return v;
+        }
+
+        return self.allocateString(chars);
     }
 
     fn allocateString(self: *Heap, chars: []u8) !*ObjString {

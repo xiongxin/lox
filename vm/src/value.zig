@@ -53,6 +53,10 @@ pub fn OBJ_VAL(obj: *Obj) Value {
     return Value{ .obj = obj };
 }
 
+pub fn OBJ_STRING_VAL(objString: *ObjString) Value {
+    return OBJ_VAL(@ptrCast(*Obj, objString));
+}
+
 pub fn AS_BOOL(value: Value) bool {
     return switch (value) {
         .boolean => |boolean| boolean,
@@ -120,4 +124,29 @@ pub fn IS_STRING(value: Value) bool {
 
 fn isObjType(value: Value, objType: ObjType) bool {
     return IS_OBJ(value) and AS_OBJ(value).objType == objType;
+}
+
+pub fn valuesEqual(a: Value, b: Value) bool {
+    switch (a) {
+        .boolean => |boolean| {
+            if (IS_BOOL(b)) {
+                return AS_BOOL(b) == boolean;
+            } else {
+                return false;
+            }
+        },
+        .number => |number| {
+            if (IS_NUMBER(b)) {
+                return AS_NUMBER(b) == number;
+            } else {
+                return false;
+            }
+        },
+        .nil => {
+            return if (IS_NIL(b)) true else false;
+        },
+        .obj => |obj| {
+            return if (IS_OBJ(b)) obj == AS_OBJ(b) else false;
+        },
+    }
 }

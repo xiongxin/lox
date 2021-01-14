@@ -22,7 +22,7 @@ const Precedence = enum {
     PREC_PRIMARY
 };
 
-const ParseFn = fn (self: *Parser) anyerror!void;
+const ParseFn = fn (self: *Parser, canAssign: bool) anyerror!void;
 
 const ParseRule = struct {
     prefix: ?ParseFn,
@@ -49,7 +49,7 @@ const ParseRule = struct {
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_GREATER_EQUAL
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_LESS
         .{ .prefix = null, .infix = Parser.binary, .precedence = .PREC_COMPARISON }, //TOKEN_LESS_EQUAL
-        .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_IDENTIFIER
+        .{ .prefix = Parser.variable, .infix = null, .precedence = .PREC_NONE }, //TOKEN_IDENTIFIER
         .{ .prefix = Parser.string, .infix = null, .precedence = .PREC_NONE }, //TOKEN_STRING
         .{ .prefix = Parser.number, .infix = null, .precedence = .PREC_NONE }, //TOKEN_NUMBER
         .{ .prefix = null, .infix = null, .precedence = .PREC_NONE }, //TOKEN_AND
@@ -103,6 +103,84 @@ pub const Parser = struct {
         try self.parsePrecedence(.PREC_ASSIGNMENT);
     }
 
+    pub fn declaration(self: *Parser) !void {
+        if (self.match(.TOKEN_VAR)) {
+            try self.varDeclaration();
+        } else {
+            try self.statement();
+        }
+
+        if (self.panicMode) self.synchronize();
+    }
+
+    fn statement(self: *Parser) !void {
+        if (self.match(.TOKEN_PRINT)) {
+            try self.printStatement();
+        } else {
+            try self.expressionStatement();
+        }
+    }
+
+    fn expressionStatement(self: *Parser) !void {
+        try self.expression();
+        self.consume(.TOKEN_SEMICOLON, "Expect ';' after expression.");
+        try self.emitCode(.OP_POP);
+    }
+
+    fn varDeclaration(self: *Parser) !void {
+        const global = try self.parseVariable("Except variable name");
+
+        if (self.match(.TOKEN_EQUAL)) {
+            try self.expression();
+        } else {
+            try self.emitCode(.OP_NIL);
+        }
+
+        self.consume(.TOKEN_SEMICOLON, "Expect ';' after var declaration.");
+
+        try self.defineVariable(global);
+    }
+
+    fn printStatement(self: *Parser) !void {
+        try self.expression();
+        self.consume(.TOKEN_SEMICOLON, "Exepect ';' after value.");
+        try self.emitCode(.OP_PRINT);
+    }
+
+    fn namedVariable(self: *Parser, name: Token, canAssign: bool) !void {
+        const arg = try self.identifierConstant(name);
+
+        if (canAssign and self.match(.TOKEN_EQUAL)) {
+            try self.expression();
+            try self.emitBytes(@enumToInt(OpCode.OP_SET_GLOBAL), arg);
+        } else {
+            try self.emitBytes(@enumToInt(OpCode.OP_GET_GLOBAL), arg);
+        }
+    }
+
+    fn parseVariable(self: *Parser, errorMessage: []const u8) !u8 {
+        self.consume(.TOKEN_IDENTIFIER, errorMessage);
+        return try self.identifierConstant(self.previous);
+    }
+
+    fn identifierConstant(self: *Parser, name: Token) !u8 {
+        return try self.makeConstant(OBJ_STRING_VAL(try self.vm.heap.copyString(name.literal)));
+    }
+
+    fn defineVariable(self: *Parser, global: u8) !void {
+        try self.emitBytes(@enumToInt(OpCode.OP_DEFINE_GLOBAL), global);
+    }
+
+    pub fn match(self: *Parser, tokenType: TokenType) bool {
+        if (!self.check(tokenType)) return false;
+        self.advance();
+        return true;
+    }
+
+    fn check(self: *Parser, tokenType: TokenType) bool {
+        return self.current.tokenType == tokenType;
+    }
+
     pub fn advance(self: *Parser) void {
         self.previous = self.current;
 
@@ -123,7 +201,11 @@ pub const Parser = struct {
         self.errorAtCurrent(message);
     }
 
-    fn literal(self: *Parser) !void {
+    fn variable(self: *Parser, canAssign: bool) !void {
+        try self.namedVariable(self.previous, canAssign);
+    }
+
+    fn literal(self: *Parser, canAssign: bool) !void {
         switch (self.previous.tokenType) {
             .TOKEN_FALSE => try self.emitCode(.OP_FALSE),
             .TOKEN_NIL => try self.emitCode(.OP_NIL),
@@ -132,21 +214,21 @@ pub const Parser = struct {
         }
     }
 
-    fn number(self: *Parser) !void {
+    fn number(self: *Parser, canAssign: bool) !void {
         const value = try std.fmt.parseFloat(f64, self.previous.literal);
         try self.emitConstant(NUMBER_VAL(value));
     }
 
-    fn string(self: *Parser) !void {
+    fn string(self: *Parser, canAssign: bool) !void {
         try self.emitConstant(OBJ_VAL(@ptrCast(*Obj, try self.vm.heap.copyString(self.previous.literal[1 .. self.previous.literal.len - 1]))));
     }
 
-    fn grouping(self: *Parser) !void {
+    fn grouping(self: *Parser, canAssign: bool) !void {
         try self.expression();
         self.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
     }
 
-    fn binary(self: *Parser) !void {
+    fn binary(self: *Parser, canAssign: bool) !void {
         // Remember the operator.
         const operatorType = self.previous.tokenType;
 
@@ -170,7 +252,7 @@ pub const Parser = struct {
         }
     }
 
-    fn unary(self: *Parser) !void {
+    fn unary(self: *Parser, canAssign: bool) !void {
         const operatorType = self.previous.tokenType;
 
         // Compile the operand.
@@ -198,12 +280,17 @@ pub const Parser = struct {
         self.advance();
         const prefixRule = ParseRule.getRule(self.previous.tokenType).prefix;
         if (prefixRule) |prefixRuleFn| {
-            try prefixRuleFn(self);
+            const canAssign = @enumToInt(precedence) <= @enumToInt(Precedence.PREC_ASSIGNMENT);
+            try prefixRuleFn(self, canAssign);
 
             while (@enumToInt(precedence) <= @enumToInt(ParseRule.getRule(self.current.tokenType).precedence)) {
                 self.advance();
                 const infixRule = ParseRule.getRule(self.previous.tokenType).infix.?;
-                try infixRule(self);
+                try infixRule(self, canAssign);
+            }
+
+            if (canAssign and self.match(.TOKEN_EQUAL)) {
+                self.error0("Invaild assignment target.");
             }
         } else {
             self.error0("Expect expression.");
@@ -271,5 +358,28 @@ pub const Parser = struct {
 
         print(": {}\n", .{message});
         self.hadError = true;
+    }
+
+    fn synchronize(self: *Parser) void {
+        self.panicMode = false;
+
+        while (self.current.tokenType != .TOKEN_EOF) {
+            if (self.previous.tokenType == .TOKEN_SEMICOLON) return;
+
+            switch (self.current.tokenType) {
+                .TOKEN_CLASS,
+                .TOKEN_FUN,
+                .TOKEN_VAR,
+                .TOKEN_FOR,
+                .TOKEN_IF,
+                .TOKEN_WHILE,
+                .TOKEN_PRINT,
+                .TOKEN_RETURN,
+                => return,
+                else => {},
+            }
+
+            self.advance();
+        }
     }
 };

@@ -27,8 +27,10 @@ pub const Compiler = struct {
         var parser = Parser.init(self, &scanner);
 
         parser.advance();
-        try parser.expression();
-        parser.consume(.TOKEN_EOF, "Expect end of expression");
+
+        while (!parser.match(.TOKEN_EOF)) {
+            try parser.declaration();
+        }
 
         try parser.endParse();
         return !parser.hadError;

@@ -11,6 +11,9 @@ pub const OpCode = enum(u8) {
     OP_NIL,
     OP_TRUE,
     OP_FALSE,
+    OP_DEFINE_GLOBAL,
+    OP_SET_GLOBAL,
+    OP_GET_GLOBAL,
     OP_EQUAL,
     OP_GREATER,
     OP_LESS,
@@ -18,6 +21,8 @@ pub const OpCode = enum(u8) {
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
+    OP_POP,
+    OP_PRINT,
     OP_RETURN,
 };
 
@@ -89,8 +94,14 @@ pub const Chunk = struct {
             .OP_GREATER,
             .OP_LESS,
             .OP_EQUAL,
+            .OP_PRINT,
+            .OP_POP,
             => return simpleInstruction(@tagName(instruction), offset),
-            .OP_CONSTANT => return self.constantInstruction(@tagName(instruction), offset),
+            .OP_CONSTANT,
+            .OP_DEFINE_GLOBAL,
+            .OP_SET_GLOBAL,
+            .OP_GET_GLOBAL,
+            => return self.constantInstruction(@tagName(instruction), offset),
         }
     }
 
