@@ -2,10 +2,12 @@ const std = @import("std");
 
 usingnamespace @import("value.zig");
 usingnamespace @import("vm.zig");
+usingnamespace @import("compiler.zig");
 
 pub const ArrayListOfU8 = std.ArrayList(u8);
 pub const ArrayListOfValue = std.ArrayList(Value);
 pub const ArrayListOfUsize = std.ArrayList(usize);
+pub const ArrayListOfLocal = std.ArrayList(Local);
 pub const String2OjStringMap = std.StringHashMap(*ObjString);
 pub const ObjString2Value = std.AutoHashMap(*ObjString, Value);
 pub const DEBUG_TRACE_EXECUTION = true;

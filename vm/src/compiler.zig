@@ -8,9 +8,24 @@ usingnamespace @import("scanner.zig");
 usingnamespace @import("parser.zig");
 usingnamespace @import("vm.zig");
 
+pub const Local = struct {
+    name: Token,
+    depth: i32,
+
+    pub fn init(name: Token, depth: i32) Local {
+        return Local{
+            .name = name,
+            .depth = depth,
+        };
+    }
+};
+
 pub const Compiler = struct {
     vm: *VM,
     chunk: *Chunk,
+
+    locals: ArrayListOfLocal,
+    scopeDepth: i32,
 
     pub fn init(
         vm: *VM,
@@ -19,20 +34,13 @@ pub const Compiler = struct {
         return Compiler{
             .chunk = chunk,
             .vm = vm,
+            .locals = ArrayListOfLocal.init(vm.allocator),
+            .scopeDepth = 0,
         };
     }
 
-    pub fn compile(self: *Compiler, source: []const u8) !bool {
-        var scanner = Scanner.init(source);
-        var parser = Parser.init(self, &scanner);
-
-        parser.advance();
-
-        while (!parser.match(.TOKEN_EOF)) {
-            try parser.declaration();
-        }
-
-        try parser.endParse();
-        return !parser.hadError;
+    pub fn addLocal(self: *Compiler, name: Token) !void {
+        const local = Local.init(name, -1);
+        try self.locals.append(local);
     }
 };

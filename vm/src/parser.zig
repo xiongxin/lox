@@ -103,7 +103,7 @@ pub const Parser = struct {
         try self.parsePrecedence(.PREC_ASSIGNMENT);
     }
 
-    pub fn declaration(self: *Parser) !void {
+    pub fn declaration(self: *Parser) anyerror!void {
         if (self.match(.TOKEN_VAR)) {
             try self.varDeclaration();
         } else {
@@ -116,8 +116,35 @@ pub const Parser = struct {
     fn statement(self: *Parser) !void {
         if (self.match(.TOKEN_PRINT)) {
             try self.printStatement();
+        } else if (self.match(.TOKEN_LEFT_BRACE)) {
+            self.beginScope();
+            try self.block();
+            try self.endScope();
         } else {
             try self.expressionStatement();
+        }
+    }
+
+    fn beginScope(self: *Parser) void {
+        self.compiler.scopeDepth += 1;
+    }
+
+    fn block(self: *Parser) !void {
+        while (!self.check(.TOKEN_RIGHT_BRACE) and !self.check(.TOKEN_EOF)) {
+            try self.declaration();
+        }
+
+        self.consume(.TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+    }
+
+    fn endScope(self: *Parser) !void {
+        self.compiler.scopeDepth -= 1;
+
+        for (self.compiler.locals.items) |local| {
+            if (local.depth > self.compiler.scopeDepth) {
+                try self.emitCode(.OP_POP);
+                _ = self.compiler.locals.pop();
+            }
         }
     }
 
@@ -147,20 +174,77 @@ pub const Parser = struct {
         try self.emitCode(.OP_PRINT);
     }
 
+    // 变量的使用，全局变量从vm中获取，本地变量编译时设置
     fn namedVariable(self: *Parser, name: Token, canAssign: bool) !void {
-        const arg = try self.identifierConstant(name);
+        var getOp: u8 = undefined;
+        var setOp: u8 = undefined;
+
+        var arg = self.resolveLocal(self.compiler, &name);
+        if (arg != -1) {
+            getOp = @enumToInt(OpCode.OP_GET_LOCAL);
+            setOp = @enumToInt(OpCode.OP_SET_LOCAL);
+        } else {
+            arg = try self.identifierConstant(name);
+            getOp = @enumToInt(OpCode.OP_GET_GLOBAL);
+            setOp = @enumToInt(OpCode.OP_SET_GLOBAL);
+        }
 
         if (canAssign and self.match(.TOKEN_EQUAL)) {
             try self.expression();
-            try self.emitBytes(@enumToInt(OpCode.OP_SET_GLOBAL), arg);
+            try self.emitBytes(setOp, @intCast(u8, arg));
         } else {
-            try self.emitBytes(@enumToInt(OpCode.OP_GET_GLOBAL), arg);
+            try self.emitBytes(getOp, @intCast(u8, arg));
         }
+    }
+
+    fn resolveLocal(self: *Parser, compiler: *Compiler, name: *const Token) i32 {
+        if (compiler.locals.items.len > 0) {
+            var i: i32 = @intCast(i32, compiler.locals.items.len - 1);
+            while (i >= 0) : (i -= 1) {
+                const local = &self.compiler.locals.items[@intCast(usize, i)];
+                if (identifiersEqual(name, &local.name)) {
+                    if (local.depth == -1) {
+                        self.error0("Can't read local variable in its own initializer.");
+                    }
+                    return i;
+                }
+            }
+        }
+
+        return -1;
     }
 
     fn parseVariable(self: *Parser, errorMessage: []const u8) !u8 {
         self.consume(.TOKEN_IDENTIFIER, errorMessage);
+
+        try self.declareVariable(); // 处理本地变量， 保存到当前编译器locals数组中
+        if (self.compiler.scopeDepth > 0) return 0;
+
+        // 处理全局变量， 保存到vm的globals中
         return try self.identifierConstant(self.previous);
+    }
+
+    fn declareVariable(self: *Parser) !void {
+        if (self.compiler.scopeDepth == 0) return;
+
+        const name = &self.previous;
+        if (self.compiler.locals.items.len > 0) {
+            var i: i32 = @intCast(i32, self.compiler.locals.items.len - 1);
+            while (i >= 0) : (i -= 1) {
+                const local = &self.compiler.locals.items[@intCast(usize, i)];
+                if (local.depth != -1 and local.depth < self.compiler.scopeDepth) break;
+
+                if (identifiersEqual(name, &local.name)) {
+                    self.error0("Already variable with this name in this scope.");
+                }
+            }
+        }
+
+        try self.compiler.addLocal(name.*);
+    }
+
+    fn identifiersEqual(a: *const Token, b: *Token) bool {
+        return std.mem.eql(u8, a.literal, b.literal);
     }
 
     fn identifierConstant(self: *Parser, name: Token) !u8 {
@@ -168,7 +252,15 @@ pub const Parser = struct {
     }
 
     fn defineVariable(self: *Parser, global: u8) !void {
+        if (self.compiler.scopeDepth > 0) {
+            self.markInitialized();
+            return;
+        }
         try self.emitBytes(@enumToInt(OpCode.OP_DEFINE_GLOBAL), global);
+    }
+
+    fn markInitialized(self: *Parser) void {
+        self.compiler.locals.items[self.compiler.locals.items.len - 1].depth = self.compiler.scopeDepth;
     }
 
     pub fn match(self: *Parser, tokenType: TokenType) bool {

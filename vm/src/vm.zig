@@ -5,6 +5,8 @@ usingnamespace @import("common.zig");
 usingnamespace @import("value.zig");
 usingnamespace @import("chunk.zig");
 usingnamespace @import("compiler.zig");
+usingnamespace @import("scanner.zig");
+usingnamespace @import("parser.zig");
 
 pub const InterpretResult = enum {
     INTERPRET_OK, INTERPRET_COMPILE_ERROR, INTERPRET_RUNTIME_ERROR
@@ -123,6 +125,14 @@ pub const VM = struct {
                     try self.globals.put(name, self.peek(0));
                     _ = self.pop();
                 },
+                .OP_GET_LOCAL => {
+                    const slot = self.readByte();
+                    self.push(self.stack[slot]);
+                },
+                .OP_SET_LOCAL => {
+                    const slot = self.readByte();
+                    self.stack[slot] = self.peek(0);
+                },
                 .OP_GET_GLOBAL => {
                     const name = self.readString();
                     if (self.globals.get(name)) |value| {
@@ -228,7 +238,18 @@ pub const VM = struct {
 
     fn compile(self: *VM, source: []const u8, chunk: *Chunk) !bool {
         var compiler = Compiler.init(self, chunk);
-        return try compiler.compile(source);
+
+        var scanner = Scanner.init(source);
+        var parser = Parser.init(&compiler, &scanner);
+
+        parser.advance();
+
+        while (!parser.match(.TOKEN_EOF)) {
+            try parser.declaration();
+        }
+
+        try parser.endParse();
+        return !parser.hadError;
     }
 
     // nil and false is false

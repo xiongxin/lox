@@ -1,0 +1,22 @@
+// 本地变量
+
+{
+    var a = "first";
+    var b = "second";
+    {
+        var a = "first1";
+        var b = "second1";
+
+        print a;
+        print b;
+        {
+            var a = "first2";
+            var b = "second2";
+
+            print a;
+            print b;
+        }
+    }
+    print a;
+    print b;
+}

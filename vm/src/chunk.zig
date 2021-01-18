@@ -11,6 +11,8 @@ pub const OpCode = enum(u8) {
     OP_NIL,
     OP_TRUE,
     OP_FALSE,
+    OP_GET_LOCAL,
+    OP_SET_LOCAL,
     OP_DEFINE_GLOBAL,
     OP_SET_GLOBAL,
     OP_GET_GLOBAL,
@@ -102,6 +104,9 @@ pub const Chunk = struct {
             .OP_SET_GLOBAL,
             .OP_GET_GLOBAL,
             => return self.constantInstruction(@tagName(instruction), offset),
+            .OP_GET_LOCAL,
+            .OP_SET_LOCAL,
+            => return self.byteInstrution(@tagName(instruction), offset),
         }
     }
 
@@ -115,6 +120,12 @@ pub const Chunk = struct {
         print("{:<16} {} '", .{ name, constant });
         printValue(self.constants.items[constant]);
         print("'\n", .{});
+        return offset + 2;
+    }
+
+    fn byteInstrution(self: *Chunk, name: []const u8, offset: usize) usize {
+        const slot = self.code.items[offset + 1];
+        print("{:<16} {:0>4}\n", .{ name, slot });
         return offset + 2;
     }
 };
