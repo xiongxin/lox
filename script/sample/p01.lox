@@ -1,0 +1,23 @@
+// this is a comment
+(( )){} // grouping stuff
+!*+-/=<> <= == // operators
+"string"
+123213.21312
+123.333
+123123
+and
+class
+else
+false
+for
+fun
+if
+nil
+or
+print
+return
+super
+this
+true
+var
+while

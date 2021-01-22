@@ -1,11 +1,11 @@
-package com.xiongxin;
+package com.xiongxin.lox;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.xiongxin.TokenType.*;
+import static com.xiongxin.lox.TokenType.*;
 
 class Scanner {
 	private final String source;
@@ -13,6 +13,27 @@ class Scanner {
 	private int start = 0;
 	private int current = 0;
 	private int line = 1;
+	private static final Map<String, TokenType> keywords;
+
+	static {
+		keywords = new HashMap<>();
+		keywords.put("and",    AND);
+		keywords.put("class",  CLASS);
+		keywords.put("else",   ELSE);
+		keywords.put("false",  FALSE);
+		keywords.put("for",    FOR);
+		keywords.put("fun",    FUN);
+		keywords.put("if",     IF);
+		keywords.put("nil",    NIL);
+		keywords.put("or",     OR);
+		keywords.put("print",  PRINT);
+		keywords.put("return", RETURN);
+		keywords.put("super",  SUPER);
+		keywords.put("this",   THIS);
+		keywords.put("true",   TRUE);
+		keywords.put("var",    VAR);
+		keywords.put("while",  WHILE);
+	}
 
 	Scanner(String source) {
 		this.source = source;
@@ -98,9 +119,40 @@ class Scanner {
 			string();
 			break;
 		default:
-			Lox.error(line, "Unexpected character.");
+			if (isDigit(c)) {
+				number();
+			} else if (isAlpha(c)) {
+				identifier();
+			} else {
+				Lox.error(line, "Unexpected character.");
+			}
 			break;
 		}
+	}
+
+	private void identifier() {
+		while (isAlphaNumeric(peek())) advance();
+
+		var text = source.substring(start, current);
+		var type = keywords.get(text);
+		if (type == null) type = IDENTIFIER;
+
+		addToken(type);
+	}
+
+	private void number() {
+		while (isDigit(peek())) advance();
+
+		// Look for a fractional part.
+		if (peek() == '.' && isDigit(peekNext())) {
+			// Consume the "."
+			advance();
+
+			while (isDigit(peek())) advance();
+		}
+
+		addToken(NUMBER,
+				Double.parseDouble(source.substring(start, current)));
 	}
 
 	private void string() {
@@ -139,13 +191,32 @@ class Scanner {
 		return source.charAt(current);
 	}
 
+	private char peekNext() {
+		if (current + 1 >= source.length()) return '\0';
+		return source.charAt(current + 1);
+	}
+
+	private boolean isAlpha(char c) {
+		return (c >= 'a' && c <= 'z') ||
+				(c >= 'A' && c <= 'Z') ||
+				c == '_';
+	}
+
+	private boolean isAlphaNumeric(char c) {
+		return isAlpha(c) || isDigit(c);
+	}
+
+	private boolean isDigit(char c) {
+		return c >= '0' && c <= '9';
+	}
+
 	private boolean isAtEnd() {
 		return current >= source.length();
 	}
 
 	private char advance() {
 		current++;
-		return source.charAt(current);
+		return source.charAt(current - 1);
 	}
 
 	private void addToken(TokenType type) {

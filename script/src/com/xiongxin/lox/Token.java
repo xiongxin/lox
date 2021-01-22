@@ -1,4 +1,4 @@
-package com.xiongxin;
+package com.xiongxin.lox;
 
 class Token {
     final TokenType type;

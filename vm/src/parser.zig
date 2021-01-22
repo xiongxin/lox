@@ -113,9 +113,11 @@ pub const Parser = struct {
         if (self.panicMode) self.synchronize();
     }
 
-    fn statement(self: *Parser) !void {
+    fn statement(self: *Parser) anyerror!void {
         if (self.match(.TOKEN_PRINT)) {
             try self.printStatement();
+        } else if (self.match(.TOKEN_IF)) {
+            try self.ifStatement();
         } else if (self.match(.TOKEN_LEFT_BRACE)) {
             self.beginScope();
             try self.block();
@@ -123,6 +125,17 @@ pub const Parser = struct {
         } else {
             try self.expressionStatement();
         }
+    }
+
+    fn ifStatement(self: *Parser) !void {
+        self.consume(.TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+        try self.expression();
+        self.consume(.TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
+
+        const thenJump = try self.emitJump(.OP_JUMP_IF_FALSE);
+        try self.statement();
+
+        self.patchJump(thenJump);
     }
 
     fn beginScope(self: *Parser) void {
@@ -401,6 +414,21 @@ pub const Parser = struct {
     fn emitBytes(self: *Parser, byte1: u8, byte2: u8) !void {
         try self.emitByte(byte1);
         try self.emitByte(byte2);
+    }
+
+    fn emitJump(self: *Parser, code: OpCode) !usize {
+        try self.emitCode(code);
+        try self.emitByte(0xff);
+        try self.emitByte(0xff);
+        return self.currentChunk().code.items.len - 2;
+    }
+
+    fn patchJump(self: *Parser, offset: usize) void {
+        // -2 to adjust for the bytecode for the jump offset iteself.
+        const jump = self.currentChunk().code.items.len - offset - 2;
+
+        self.currentChunk().code.items[offset] = @intCast(u8, (jump >> 8) & 0xff);
+        self.currentChunk().code.items[offset] = @intCast(u8, jump & 0xff);
     }
 
     fn emitCode(self: *Parser, code: OpCode) !void {

@@ -151,6 +151,10 @@ pub const VM = struct {
                         return .INTERPRET_RUNTIME_ERROR;
                     }
                 },
+                .OP_JUMP_IF_FALSE => {
+                    const offset = self.readShort();
+                    if (isFalsey(self.peek(0))) self.ip += offset;
+                },
                 .OP_ADD,
                 .OP_SUBTRACT,
                 .OP_MULTIPLY,
@@ -230,6 +234,13 @@ pub const VM = struct {
         var res = self.ip[0];
         self.ip += 1;
         return res;
+    }
+
+    fn readShort(self: *VM) u16 {
+        var offset = @intCast(u16, self.ip[0]) << 8;
+        offset |= self.ip[1];
+        self.ip += 2;
+        return offset;
     }
 
     fn readString(self: *VM) *ObjString {

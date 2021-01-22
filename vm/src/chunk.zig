@@ -17,6 +17,7 @@ pub const OpCode = enum(u8) {
     OP_SET_GLOBAL,
     OP_GET_GLOBAL,
     OP_EQUAL,
+    OP_JUMP_IF_FALSE,
     OP_GREATER,
     OP_LESS,
     OP_ADD,
@@ -107,6 +108,7 @@ pub const Chunk = struct {
             .OP_GET_LOCAL,
             .OP_SET_LOCAL,
             => return self.byteInstrution(@tagName(instruction), offset),
+            .OP_JUMP_IF_FALSE => return self.jumpInstruction(1, @tagName(instruction), offset),
         }
     }
 
@@ -121,6 +123,13 @@ pub const Chunk = struct {
         printValue(self.constants.items[constant]);
         print("'\n", .{});
         return offset + 2;
+    }
+
+    fn jumpInstruction(self: *Chunk, sign: i32, name: []const u8, offset: usize) usize {
+        var jump = @intCast(u16, self.code.items[offset + 1]) << 8;
+        jump |= self.code.items[offset + 2];
+        print("{s:<16} {:>4} -> {}\n", .{ name, offset, @intCast(i32, offset) + 3 + @intCast(i32, sign) * @intCast(i32, jump) });
+        return offset + 3;
     }
 
     fn byteInstrution(self: *Chunk, name: []const u8, offset: usize) usize {

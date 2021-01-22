@@ -1,4 +1,4 @@
-package com.xiongxin;
+package com.xiongxin.lox;
 
 import java.io.BufferedReader;
 import java.io.IOException;

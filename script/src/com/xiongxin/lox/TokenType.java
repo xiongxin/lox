@@ -1,4 +1,4 @@
-package com.xiongxin;
+package com.xiongxin.lox;
 
 enum TokenType {
     // Single-character tokens.
